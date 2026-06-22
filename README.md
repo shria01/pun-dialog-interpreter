@@ -1,5 +1,5 @@
-# Dialog-Pun-Interpreter-Group-10-NLP-Project
-Project to make a dialog based bot to interpert puns and jokes
+# pun-dialog-interpreter
+NLP dialog bot that identifies pun word senses and explains semantic humor using SBERT, WordNet, and Google Gemini API
 # Overview
 This project focuses on puns, a form of wordplay that relies on words with multiple meanings. Humor in puns emerges when an initial interpretation of a sentence is replaced by an unexpected but logically consistent alternative meaning. Because of this semantic incongruity, pun processing requires identifying multiple senses of words, evaluating their contextual fit, and understanding how sentence meaning shifts over time.
 
