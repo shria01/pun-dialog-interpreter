@@ -1,5 +1,6 @@
 gradio
 google-genai
 nltk
+openai
 spacy
 sentence-transformers

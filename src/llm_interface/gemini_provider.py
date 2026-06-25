@@ -11,7 +11,7 @@ class GeminiProvider(LLMInterface):
         self.client = genai.Client(api_key=api_key)
         self.model = "gemini-2.5-flash"
 
-    def generate(self, prompt):
+    def generate(self, prompt: str) -> str:
         response = self.client.models.generate_content(
             model=self.model,
             contents=prompt
