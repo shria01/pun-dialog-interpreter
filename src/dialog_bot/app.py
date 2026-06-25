@@ -9,6 +9,8 @@ sys.path.append(os.path.dirname(__file__))
 
 # imports from your modules
 from dialog_bot import analyze_pun, chat
+from llm_interface.gemini_provider import GeminiProvider
+from llm_interface.openai_provider import OpenAIProvider
 
 current_analysis = {}
 current_sentence = ""
@@ -20,6 +22,13 @@ EXAMPLE_PUNS = [
     "Time flies like an arrow fruit flies like a banana",
 ]
 
+def get_provider(name):
+    if name == "Gemini":
+        return GeminiProvider()
+    elif name == "OpenAI":
+        return OpenAIProvider()
+    else:
+        raise ValueError(f"Unknown provider: {name}")
 
 def to_pairs(history):
     """Convert Gradio history dicts into (user, bot) tuples."""
@@ -34,11 +43,11 @@ def to_pairs(history):
     return pairs
 
 
-def set_pun(sentence):
+def set_pun(sentence, provider_name):
     """Analyze pun sentence and return summary."""
     global current_analysis, current_sentence
     current_sentence = sentence
-    current_analysis = analyze_pun(sentence)
+    current_analysis = analyze_pun(sentence, get_provider(provider_name))
 
     summary = (f"**Pun word:** {current_analysis['pun_word']}\n"
                f"**Meaning A:** {current_analysis['sense_a']}\n"
@@ -47,7 +56,7 @@ def set_pun(sentence):
     return summary, [], []
 
 
-def respond(question, history):
+def respond(question, history, provider_name):
     """Generate chatbot response."""
     if not current_analysis:
         msg = "Please enter a pun sentence first (above) and click Analyze."
@@ -56,13 +65,14 @@ def respond(question, history):
         return history, history
 
     pairs = to_pairs(history)
-    answer = chat(current_sentence, question, pairs, current_analysis)
+    provider = get_provider(provider_name)
+    answer = chat(current_sentence, question, pairs, current_analysis, provider)
     history = history + [{"role": "user", "content": question},
                          {"role": "assistant", "content": answer}]
     return history, history
 
 
-with gr.Blocks(title="Pun Interpreter - Group 10") as demo:
+with gr.Blocks(title="Pun Dialog Interpreter") as demo:
     gr.Markdown("# Pun Interpreter")
     gr.Markdown("Enter a pun below (or pick an example), then ask questions about it.")
 
@@ -84,14 +94,20 @@ with gr.Blocks(title="Pun Interpreter - Group 10") as demo:
                                scale=4)
         send_btn = gr.Button("Send", variant="primary", scale=1)
 
+    provider_toggle = gr.Radio(
+        choices=["Gemini", "OpenAI"],
+        value="Gemini",
+        label="LLM Provider"
+    )
+
     # Hook up buttons
-    analyze_btn.click(fn=set_pun, inputs=[pun_input],
+    analyze_btn.click(fn=set_pun, inputs=[pun_input, provider_toggle],
                       outputs=[analysis_display, state, chatbot])
 
-    send_btn.click(fn=respond, inputs=[msg_input, state],
+    send_btn.click(fn=respond, inputs=[msg_input, state, provider_toggle],
                    outputs=[chatbot, state]).then(lambda: "", outputs=[msg_input])
 
-    msg_input.submit(fn=respond, inputs=[msg_input, state],
+    msg_input.submit(fn=respond, inputs=[msg_input, state, provider_toggle],
                      outputs=[chatbot, state]).then(lambda: "", outputs=[msg_input])
 
 if __name__ == "__main__":
