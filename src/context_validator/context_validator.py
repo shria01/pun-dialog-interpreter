@@ -1,12 +1,8 @@
-import os
 import json
-from google import genai
+import re
+from llm_interface.interface import LLMInterface
 
-client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY", ""))
-MODEL = "gemini-2.5-flash"
-
-
-def validate_context(sentence, pun_word, sense_a, sense_b):
+def validate_context(sentence, pun_word, sense_a, sense_b, provider: LLMInterface):
     prompt = f"""
 You are evaluating whether a pun works.
 
@@ -26,17 +22,10 @@ Return STRICT JSON:
 }}
 """
 
-    response = client.models.generate_content(
-        model=MODEL,
-        contents=prompt
-    )
-
-    text = response.text.strip()
-
-    if text.startswith("```"):
-        text = text.split("```")[1]
-
     try:
+        text = provider.generate(prompt)
+        text = re.sub(r"```(?:json)?\s*", "", text)
+        text = text.replace("```", "").strip()
         return json.loads(text)
     except Exception:
         return {
