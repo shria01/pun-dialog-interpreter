@@ -1,86 +1,102 @@
-# pun-dialog-interpreter
-NLP dialog bot that identifies pun word senses and explains semantic humor using SBERT, WordNet, and Google Gemini API
-# Overview
-This project focuses on puns, a form of wordplay that relies on words with multiple meanings. Humor in puns emerges when an initial interpretation of a sentence is replaced by an unexpected but logically consistent alternative meaning. Because of this semantic incongruity, pun processing requires identifying multiple senses of words, evaluating their contextual fit, and understanding how sentence meaning shifts over time.
+# Pun Dialog Interpreter
 
-The goal of this project is to design a computational system capable of:
+A conversational AI system that identifies pun words, explains the humor, and answers follow-up questions. Built with Python, SBERT, spaCy, WordNet, Gradio, and your choice of Google Gemini or OpenAI GPT.
 
-Identifying the multiple meanings involved in a pun
+![Pun Analysis Demo](screenshots/analysis.png)
+ 
+## How It Works
+ 
+1. Enter a pun or pick one of the examples
+2. Click Analyze — the system identifies the pun word and its two meanings
+3. Ask questions in the chat about why it's funny
+4. Switch between Gemini and OpenAI using the toggle at the bottom
 
-Explaining the semantic incongruity that produces humor
+![Chat Demo](screenshots/chat.png)
 
-Answering user questions about a given pun
+## Architecture 
 
-# Instructions
-1. Install Python dependencies
+When a user enters a pun, `sense_finder` tokenizes it with spaCy and looks up WordNet synsets for each noun, verb, and adjective. For each word, it uses SBERT to encode the sentence and all of that word's definitions, then scores them based on how well the top two meanings fit the sentence context and how semantically distant those meanings are from each other. The top 3 candidates get passed to `context_validator` which sends them to the LLM and asks it to pick the actual pun word and validate whether both meanings work. The result comes back as structured JSON and goes to `dialog_bot` which builds the conversation history and routes to whichever provider the user selected. The Gradio UI shows the analysis and opens the chat for follow-up questions. 
 
-Open PowerShell (or terminal) in your project root and run:
+The LLM layer uses an abstract interface built with Python's ABC module. Gemini and OpenAI both implement the same `generate` and `chat` methods. Gemini converts the standard message format to its own format internally and OpenAI passes it through as is. Adding another provider just means implementing those two methods.
 
-py -m pip install -r src/dialog_bot/requirements.txt
+## Setup Instructions
 
-This will install:
+### 1. Clone the repo
+```bash
+git clone https://github.com/shria01/pun-dialog-interpreter.git
+cd pun-dialog-interpreter
+```
 
-gradio
+### 2. Install dependencies
+```bash
+pip install -r src/dialog_bot/requirements.txt
+```
 
-google-genai
+### 3. Download the spaCy model
+```bash
+python -m spacy download en_core_web_sm
+```
 
-nltk
-
-spacy
-
-sentence-transformers
-
-2. Download spaCy English model
-
-This project requires the English model for spaCy. Run:
-
-py -m spacy download en_core_web_sm
-
-Only needs to be done once per machine.
-
-3. Set your Google API key
-
-Your project uses Google GenAI. In PowerShell, run:
-
-$env:GOOGLE_API_KEY="YOUR_KEY_HERE"
-
-Replace YOUR_KEY_HERE with your actual key.
-
-To make it permanent:
-
-setx GOOGLE_API_KEY "YOUR_KEY_HERE"
-
-Keep your API key private. Do not push it to GitHub.
-
-4. Run the chatbot
-
-From the project root, run:
-
-py src\dialog_bot\app.py
-
-You should see:
-
-Running on http://127.0.0.1:7860
-
-Open that URL in your browser to interact with the bot.
-
-5. NLTK setup (if needed)
-
-If you get errors about missing NLTK data, run Python and execute:
-
+### 4. Setup NLTK (if needed)
+```python
 import nltk
 nltk.download('wordnet')
 nltk.download('omw-1.4')
 nltk.download('punkt')
-exit()
-6. Notes
+```
 
-Ensure your imports are correct:
+### 5. Set your API keys
+```bash
+export GEMINI_API_KEY="your-key-here"   # required default provider
+export OPENAI_API_KEY="your-key-here"   # only needed if switching to OpenAI
+```
 
-from sense_finder.sense_finder import find_senses
-from context_validator.context_validator import validate_context
+Get an Gemini key at [aistudio.google.com](https://aistudio.google.com/apikey)
 
-Make sure you run the app from the project root (where src/ lives), so Python can find sibling modules.
+Get an OpenAI key at [platform.openai.com](https://platform.openai.com/api-keys)
 
-This project works with the Gemini API via Google GenAI. Ensure your API key is valid and private.
+### 6. Run the app
+```bash
+cd src/dialog_bot
+python app.py
+```
+Then open the local URL printed in your terminal (usually http://127.0.0.1:7860).
 
+## Examples to try
+ 
+- "I used to be a banker but I lost interest"
+- "The math teacher was a good ruler"
+- "A boiled egg in the morning is hard to beat"
+- "I used to hate facial hair but then it grew on me"
+- "Broken pencils are pointless"
+
+## Pun scoring
+ 
+For each content word the sense_finder computes:
+ 
+```
+pun_score = avg(sense_a_similarity, sense_b_similarity) × semantic_distance
+```
+ 
+`sense_a_similarity` and `sense_b_similarity` are cosine similarities between the sentence embedding and the top two WordNet definitions. `semantic_distance` is how far apart those two definitions are from each other. The top 3 words by score get passed to the LLM, which makes the final call based on actual linguistic context.
+ 
+**Known limitation:** WordNet indexes individual words, so phrasal verbs and idioms like "put down" or "give up" are partially missed — the idiomatic meaning doesn't exist on either word alone.
+ 
+
+## My contributions
+ 
+This started as a group NLP project at Purdue. In this fork I:
+ 
+- Built the `sense_finder` module — SBERT embeddings, POS-aware WordNet lookup, and the pun scoring formula
+- Changed the detection approach to return top 3 candidates instead of one, so the LLM makes the final linguistic call rather than relying entirely on the score
+- Refactored the LLM layer into an abstract provider interface so Gemini and OpenAI are swappable without changing anything else
+- Added OpenAI support with runtime provider switching in the UI
+- Updated `context_validator` so the LLM both selects the pun word and validates it, rather than only validating a pre-selected word
+- Added retry logic and better JSON parsing for structured outputs
+
+## Author
+ 
+Shria Kondragunta — [github.com/shria01](https://github.com/shria01)
+ 
+Original project: [ssuwaneh/Dialog-Pun-Interpreter-Group-10-NLP-Project](https://github.com/ssuwaneh/Dialog-Pun-Interpreter-Group-10-NLP-Project)
+ 
