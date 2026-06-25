@@ -5,7 +5,10 @@ import os
 import gradio as gr
 
 # Add src folder to Python path so sibling modules can be imported
-sys.path.append(os.path.dirname(__file__))
+CURRENT_DIR = os.path.dirname(__file__)
+SRC_DIR = os.path.dirname(CURRENT_DIR)
+sys.path.append(CURRENT_DIR)
+sys.path.append(SRC_DIR)
 
 # imports from your modules
 from dialog_bot import analyze_pun, chat
@@ -17,9 +20,10 @@ current_sentence = ""
 
 EXAMPLE_PUNS = [
     "I used to be a banker but I lost interest",
-    "I'm reading a book about anti-gravity it's impossible to put down",
-    "The bicycle can't stand on its own because it's two tired",
-    "Time flies like an arrow fruit flies like a banana",
+    "The math teacher was a good ruler",
+    "A boiled egg in the morning is hard to beat",
+    "I used to hate facial hair but then it grew on me",
+    "Broken pencils are pointless",
 ]
 
 def get_provider(name):

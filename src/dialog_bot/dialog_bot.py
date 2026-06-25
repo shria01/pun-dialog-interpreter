@@ -11,13 +11,11 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from sense_finder.sense_finder import find_senses
 from context_validator.context_validator import validate_context
 
-def analyze_pun(sentence, provider: LLMInterface):
+def analyze_pun(sentence, provider: LLMInterface)  -> dict:
     """Analyze pun sentence using sense finder and context validator."""
-    senses = find_senses(sentence)
-    validation = validate_context(
-        sentence, senses["pun_word"], senses["sense_a"], senses["sense_b"], provider
-    )
-    return {**senses, **validation}
+    candidates = find_senses(sentence)
+    validation = validate_context(sentence, candidates, provider)
+    return validation
 
 
 def build_system_prompt(sentence, analysis):
