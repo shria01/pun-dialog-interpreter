@@ -1,9 +1,8 @@
 # dialog_bot.py
-# requires GEMINI_API_KEY environment variable to be set
-# get one at https://aistudio.google.com/apikey
+# requires GEMINI_API_KEY or OPENAI_API_KEY environment variable
 
 import os
-from google import genai
+from llm_interface.interface import LLMInterface
 
 # Add src folder to Python path so sibling modules can be imported
 import sys
@@ -12,20 +11,11 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from sense_finder.sense_finder import find_senses
 from context_validator.context_validator import validate_context
 
-# Gemini client setup
-API_KEY = os.environ.get("GEMINI_API_KEY", "")
-if not API_KEY:
-    raise EnvironmentError("GEMINI_API_KEY environment variable is not set")
-client = genai.Client(api_key=API_KEY)
-
-MODEL = "gemini-2.5-flash"
-
-
-def analyze_pun(sentence):
+def analyze_pun(sentence, provider: LLMInterface):
     """Analyze pun sentence using sense finder and context validator."""
     senses = find_senses(sentence)
     validation = validate_context(
-        sentence, senses["pun_word"], senses["sense_a"], senses["sense_b"]
+        sentence, senses["pun_word"], senses["sense_a"], senses["sense_b"], provider
     )
     return {**senses, **validation}
 
@@ -47,21 +37,20 @@ Answer whatever the user asks about this pun. Be conversational, not robotic.
 If they ask something off-topic just bring it back to the pun."""
 
 
-def chat(sentence, question, history, analysis):
+def chat(sentence, question, history, analysis, provider: LLMInterface):
     """Generate conversational response about a pun."""
     system_prompt = build_system_prompt(sentence, analysis)
 
     # seed the conversation with the system prompt as a fake user/model exchange
-    contents = [
-        {"role": "user", "parts": [{"text": system_prompt + "\n\nReady to answer questions."}]},
-        {"role": "model", "parts": [{"text": "Got it, I've reviewed the pun analysis. Ask me anything about it."}]},
+    messages = [
+        {"role": "user", "content": system_prompt + "\n\nReady to answer questions."},
+        {"role": "assistant", "content": "Got it, I've reviewed the pun analysis. Ask me anything about it."},
     ]
 
     for user_msg, bot_msg in history:
-        contents.append({"role": "user", "parts": [{"text": user_msg}]})
-        contents.append({"role": "model", "parts": [{"text": bot_msg}]})
+        messages.append({"role": "user", "content": user_msg})
+        messages.append({"role": "assistant", "content": bot_msg})
 
-    contents.append({"role": "user", "parts": [{"text": question}]})
+    messages.append({"role": "user", "content": question})
 
-    response = client.models.generate_content(model=MODEL, contents=contents)
-    return response.text
+    return provider.chat(messages)
