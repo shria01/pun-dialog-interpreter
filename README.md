@@ -84,14 +84,14 @@ pun_score = avg(sense_a_similarity, sense_b_similarity) × semantic_distance
  
 
 ## My contributions
+Co-authored the original pun scoring and WordNet-based detection as part of a Purdue group project, then in this fork extended it. In the original project, I solely built the sense_finder module — SBERT embeddings, POS-aware WordNet lookup, and the pun scoring formula. (context_validator and dialog_bot were built by teammates.)
  
-Co-authored the original pun scoring and WordNet-based detection as part of a Purdue group project, then in this fork extended it by:
-- Built the `sense_finder` module — SBERT embeddings, POS-aware WordNet lookup, and the pun scoring formula
-- Changed the detection approach to return top 3 candidates instead of one, so the LLM makes the final linguistic call rather than relying entirely on the score
-- Refactored the LLM layer into an abstract provider interface so Gemini and OpenAI are swappable without changing anything else
-- Added OpenAI support with runtime provider switching in the UI
-- Updated `context_validator` so the LLM both selects the pun word and validates it, rather than only validating a pre-selected word
-- Added retry logic and better JSON parsing for structured outputs
+In this fork, I extended the system by:
+- Changing detection to return the top 3 candidates instead of one so the LLM makes the final linguistic call rather than relying entirely on the score
+- Refactoring the LLM layer into an abstract provider interface so Gemini and OpenAI are swappable without touching the rest of the code
+- Adding OpenAI support with runtime provider switching in the UI
+- Updating `context_validator` so the LLM both selects the pun word and validates it instead of only validating a pre-selected word
+- Adding retry logic and better JSON parsing for structured outputs
 
 ## Author
  
