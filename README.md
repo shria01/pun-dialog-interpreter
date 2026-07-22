@@ -85,8 +85,7 @@ pun_score = avg(sense_a_similarity, sense_b_similarity) × semantic_distance
 
 ## My contributions
  
-This started as a group NLP project at Purdue. In this fork I:
- 
+Co-authored the original pun scoring and WordNet-based detection as part of a Purdue group project, then in this fork extended it by:
 - Built the `sense_finder` module — SBERT embeddings, POS-aware WordNet lookup, and the pun scoring formula
 - Changed the detection approach to return top 3 candidates instead of one, so the LLM makes the final linguistic call rather than relying entirely on the score
 - Refactored the LLM layer into an abstract provider interface so Gemini and OpenAI are swappable without changing anything else
