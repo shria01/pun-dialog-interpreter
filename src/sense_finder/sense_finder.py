@@ -15,6 +15,21 @@ import spacy
 from sentence_transformers import SentenceTransformer, util
 from nltk.corpus import wordnet as wn
 
+
+def ensure_nltk_data():
+  """Install WordNet data on first startup in a fresh hosted environment."""
+  resources = {
+      "corpora/wordnet": "wordnet",
+      "corpora/omw-1.4": "omw-1.4",
+  }
+  for resource_path, package_name in resources.items():
+    try:
+      nltk.data.find(resource_path)
+    except LookupError:
+      nltk.download(package_name, quiet=True)
+
+
+ensure_nltk_data()
 nlp = spacy.load("en_core_web_sm")
 model = SentenceTransformer("all-MiniLM-L6-v2")
 

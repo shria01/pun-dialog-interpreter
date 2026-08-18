@@ -15,9 +15,6 @@ from dialog_bot import analyze_pun, chat
 from llm_interface.gemini_provider import GeminiProvider
 from llm_interface.openai_provider import OpenAIProvider
 
-current_analysis = {}
-current_sentence = ""
-
 EXAMPLE_PUNS = [
     "I used to be a banker but I lost interest",
     "The math teacher was a good ruler",
@@ -25,6 +22,17 @@ EXAMPLE_PUNS = [
     "I used to hate facial hair but then it grew on me",
     "Broken pencils are pointless",
 ]
+
+AVAILABLE_PROVIDERS = []
+if os.environ.get("GEMINI_API_KEY"):
+    AVAILABLE_PROVIDERS.append("Gemini")
+if os.environ.get("OPENAI_API_KEY"):
+    AVAILABLE_PROVIDERS.append("OpenAI")
+
+# Keep the UI renderable when no key is configured so the resulting error
+# clearly points the local developer to the missing default key.
+if not AVAILABLE_PROVIDERS:
+    AVAILABLE_PROVIDERS = ["Gemini"]
 
 def get_provider(name):
     if name == "Gemini":
@@ -49,20 +57,21 @@ def to_pairs(history):
 
 def set_pun(sentence, provider_name):
     """Analyze pun sentence and return summary."""
-    global current_analysis, current_sentence
-    current_sentence = sentence
-    current_analysis = analyze_pun(sentence, get_provider(provider_name))
+    analysis = analyze_pun(sentence, get_provider(provider_name))
 
-    summary = (f"**Pun word:** {current_analysis['pun_word']}\n"
-               f"**Meaning A:** {current_analysis['sense_a']}\n"
-               f"**Meaning B:** {current_analysis['sense_b']}\n"
-               f"**Pun works:** {'Yes' if current_analysis['pun_works'] else 'No'}")
-    return summary, [], []
+    summary = (f"**Pun word:** {analysis['pun_word']}\n"
+               f"**Meaning A:** {analysis['sense_a']}\n"
+               f"**Meaning B:** {analysis['sense_b']}\n"
+               f"**Pun works:** {'Yes' if analysis['pun_works'] else 'No'}")
+    session = {"sentence": sentence, "analysis": analysis}
+    return summary, [], [], session
 
 
-def respond(question, history, provider_name):
+def respond(question, history, provider_name, session):
     """Generate chatbot response."""
-    if not current_analysis:
+    analysis = session.get("analysis") if session else None
+    sentence = session.get("sentence") if session else None
+    if not analysis or not sentence:
         msg = "Please enter a pun sentence first (above) and click Analyze."
         history = history + [{"role": "user", "content": question},
                              {"role": "assistant", "content": msg}]
@@ -70,13 +79,13 @@ def respond(question, history, provider_name):
 
     pairs = to_pairs(history)
     provider = get_provider(provider_name)
-    answer = chat(current_sentence, question, pairs, current_analysis, provider)
+    answer = chat(sentence, question, pairs, analysis, provider)
     history = history + [{"role": "user", "content": question},
                          {"role": "assistant", "content": answer}]
     return history, history
 
 
-with gr.Blocks(title="Pun Dialog Interpreter") as demo:
+with gr.Blocks(title="Pun Dialog Interpreter", theme=gr.themes.Soft()) as demo:
     gr.Markdown("# Pun Interpreter")
     gr.Markdown("Enter a pun below (or pick an example), then ask questions about it.")
 
@@ -89,8 +98,9 @@ with gr.Blocks(title="Pun Dialog Interpreter") as demo:
     gr.Examples(examples=EXAMPLE_PUNS, inputs=pun_input, label="Try one of these")
 
     analysis_display = gr.Markdown(label="Analysis")
-    chatbot = gr.Chatbot(height=350, show_label=False)
+    chatbot = gr.Chatbot(height=350, show_label=False, type="messages")
     state = gr.State([])
+    session_state = gr.State({"sentence": "", "analysis": None})
 
     with gr.Row():
         msg_input = gr.Textbox(label="Ask a question about the pun",
@@ -99,20 +109,20 @@ with gr.Blocks(title="Pun Dialog Interpreter") as demo:
         send_btn = gr.Button("Send", variant="primary", scale=1)
 
     provider_toggle = gr.Radio(
-        choices=["Gemini", "OpenAI"],
-        value="Gemini",
+        choices=AVAILABLE_PROVIDERS,
+        value=AVAILABLE_PROVIDERS[0],
         label="LLM Provider"
     )
 
     # Hook up buttons
     analyze_btn.click(fn=set_pun, inputs=[pun_input, provider_toggle],
-                      outputs=[analysis_display, state, chatbot])
+                      outputs=[analysis_display, state, chatbot, session_state])
 
-    send_btn.click(fn=respond, inputs=[msg_input, state, provider_toggle],
+    send_btn.click(fn=respond, inputs=[msg_input, state, provider_toggle, session_state],
                    outputs=[chatbot, state]).then(lambda: "", outputs=[msg_input])
 
-    msg_input.submit(fn=respond, inputs=[msg_input, state, provider_toggle],
+    msg_input.submit(fn=respond, inputs=[msg_input, state, provider_toggle, session_state],
                      outputs=[chatbot, state]).then(lambda: "", outputs=[msg_input])
 
 if __name__ == "__main__":
-    demo.launch(theme=gr.themes.Soft())
+    demo.launch()
