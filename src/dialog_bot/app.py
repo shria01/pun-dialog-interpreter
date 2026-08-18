@@ -1,26 +1,28 @@
-# run with: python app.py
-
-import sys
+import html
 import os
+import sys
+
 import gradio as gr
 
-# Add src folder to Python path so sibling modules can be imported
 CURRENT_DIR = os.path.dirname(__file__)
 SRC_DIR = os.path.dirname(CURRENT_DIR)
 sys.path.append(CURRENT_DIR)
 sys.path.append(SRC_DIR)
 
-# imports from your modules
 from dialog_bot import analyze_pun, chat
 from llm_interface.gemini_provider import GeminiProvider
 from llm_interface.openai_provider import OpenAIProvider
 
-EXAMPLE_PUNS = [
-    "I used to be a banker but I lost interest",
-    "The math teacher was a good ruler",
-    "A boiled egg in the morning is hard to beat",
-    "I used to hate facial hair but then it grew on me",
-    "Broken pencils are pointless",
+
+EXAMPLE_PUNS = {
+    "Lost interest": "I used to be a banker but I lost interest",
+    "Pointless": "Broken pencils are pointless",
+    "Grew on me": "I used to hate facial hair but then it grew on me",
+}
+FOLLOW_UPS = [
+    "Why is this funny?",
+    "Which meaning is literal?",
+    "Could you explain the wordplay?",
 ]
 
 AVAILABLE_PROVIDERS = []
@@ -28,22 +30,99 @@ if os.environ.get("GEMINI_API_KEY"):
     AVAILABLE_PROVIDERS.append("Gemini")
 if os.environ.get("OPENAI_API_KEY"):
     AVAILABLE_PROVIDERS.append("OpenAI")
-
-# Keep the UI renderable when no key is configured so the resulting error
-# clearly points the local developer to the missing default key.
 if not AVAILABLE_PROVIDERS:
     AVAILABLE_PROVIDERS = ["Gemini"]
+
+APP_CSS = """
+:root {
+  --page: #0b0f17; --surface: #111827; --surface-2: #172033;
+  --border: #263244; --text: #f3f4f6; --muted: #94a3b8;
+  --accent: #6366f1; --positive: #34d399;
+}
+.gradio-container { background: var(--page) !important; color: var(--text) !important; }
+#app-shell { max-width: 1100px; margin: 0 auto; padding: 32px 24px 48px; gap: 0; }
+.hero { margin-bottom: 32px; }
+.eyebrow, .section-label, .meaning-label {
+  color: var(--muted); font-size: 12px; font-weight: 700;
+  letter-spacing: .12em; text-transform: uppercase;
+}
+.hero h1 { color: var(--text); font-size: clamp(32px, 5vw, 44px); line-height: 1.05; margin: 8px 0 12px; }
+.hero-copy { color: var(--text); font-size: 18px; margin: 0 0 6px; }
+.hero-tech { color: var(--muted); font-size: 14px; margin: 0; }
+#pun-input textarea, #question-input textarea {
+  background: var(--surface) !important; border: 1px solid var(--border) !important;
+  border-radius: 8px !important; color: var(--text) !important;
+  font-size: 16px !important; min-height: 52px !important;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+#pun-input textarea:focus, #question-input textarea:focus {
+  border-color: var(--accent) !important; box-shadow: 0 0 0 3px rgb(99 102 241 / 18%) !important;
+}
+#analyze-button, #ask-button {
+  background: var(--accent) !important; border: 0 !important; border-radius: 8px !important;
+  color: white !important; font-weight: 700 !important; min-height: 52px;
+  transition: filter 150ms ease, transform 150ms ease;
+}
+#analyze-button:hover, #ask-button:hover { filter: brightness(1.1); transform: translateY(-1px); }
+#provider-selector { margin: 12px 0 24px; }
+#provider-selector label { background: var(--surface) !important; border-color: var(--border) !important; border-radius: 8px !important; }
+#provider-selector label:has(input:checked) { background: rgb(99 102 241 / 16%) !important; border-color: var(--accent) !important; }
+.example-row, .followup-row { gap: 8px; margin: 8px 0 32px; }
+.example-chip, .followup-chip {
+  background: transparent !important; border: 1px solid var(--border) !important;
+  border-radius: 6px !important; color: var(--muted) !important;
+  font-size: 13px !important; min-width: auto !important;
+  transition: color 150ms ease, border-color 150ms ease, background 150ms ease;
+}
+.example-chip:hover, .followup-chip:hover { background: var(--surface) !important; border-color: #475569 !important; color: var(--text) !important; }
+.section-divider { border-top: 1px solid var(--border); margin: 16px 0 24px; padding-top: 24px; }
+.analysis-result { margin-bottom: 40px; }
+.result-heading { display: flex; justify-content: space-between; gap: 16px; align-items: end; margin: 10px 0 20px; }
+.pun-word { color: var(--text); font-size: clamp(32px, 6vw, 44px); font-weight: 750; letter-spacing: -.02em; }
+.status { color: var(--positive); font-size: 14px; font-weight: 700; white-space: nowrap; }
+.status.neutral { color: var(--muted); }
+.meaning-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.meaning-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  min-height: 150px; padding: 20px; transition: border-color 150ms ease, transform 150ms ease;
+}
+.meaning-card:hover { border-color: #475569; transform: translateY(-1px); }
+.meaning-text { color: var(--text); font-size: 16px; line-height: 1.6; margin: 18px 0 0; }
+.meaning-bridge { color: var(--muted); font-size: 13px; text-align: center; margin: 14px 0 28px; }
+.why-title { color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.why-copy { color: var(--text); font-size: 16px; line-height: 1.65; max-width: 780px; }
+.provider-note { color: var(--muted); font-size: 12px; margin-top: 14px; }
+.error-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+.error-card h3 { color: var(--text); margin: 0 0 8px; }
+.error-card p { color: var(--muted); margin: 0; }
+#chatbot { background: transparent !important; border: 0 !important; min-height: 0 !important; }
+#chatbot .message { border-radius: 10px !important; padding: 12px 14px !important; }
+.how-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin: 18px 0 36px; }
+.how-step strong { color: var(--text); display: block; margin: 6px 0; }
+.how-step span:last-child { color: var(--muted); font-size: 13px; line-height: 1.5; }
+.step-number { color: var(--accent); font-size: 12px; font-weight: 700; }
+.footer { border-top: 1px solid var(--border); color: var(--muted); display: flex; justify-content: space-between; padding-top: 20px; font-size: 13px; }
+.footer a { color: #a5b4fc; text-decoration: none; }
+@media (max-width: 700px) {
+  #app-shell { padding: 24px 16px 36px; }
+  .meaning-grid, .how-grid { grid-template-columns: 1fr; }
+  .result-heading, .footer { align-items: flex-start; flex-direction: column; }
+  #input-row, #question-row { flex-direction: column; }
+  #analyze-button, #ask-button { width: 100%; }
+}
+"""
+
 
 def get_provider(name):
     if name == "Gemini":
         return GeminiProvider()
-    elif name == "OpenAI":
+    if name == "OpenAI":
         return OpenAIProvider()
-    else:
-        raise ValueError(f"Unknown provider: {name}")
+    raise ValueError(f"Unknown provider: {name}")
+
 
 def to_pairs(history):
-    """Convert Gradio history dicts into (user, bot) tuples."""
+    """Convert Gradio message dictionaries into user/assistant pairs."""
     pairs = []
     i = 0
     while i < len(history) - 1:
@@ -55,77 +134,184 @@ def to_pairs(history):
     return pairs
 
 
-def set_pun(sentence, provider_name):
-    """Analyze pun sentence and return summary."""
-    analysis = analyze_pun(sentence, get_provider(provider_name))
+def render_analysis(analysis, provider_name):
+    """Render model output as a safe, structured analysis panel."""
+    word = html.escape(str(analysis.get("pun_word", "No clear pun")))
+    sense_a = html.escape(str(analysis.get("sense_a", "No first meaning found.")))
+    sense_b = html.escape(str(analysis.get("sense_b", "No second meaning found.")))
+    reason = html.escape(str(analysis.get("reason", "No explanation was returned.")))
+    provider = html.escape(provider_name)
+    works = bool(analysis.get("pun_works"))
+    status = "✓ Double meaning confirmed" if works else "No clear pun detected"
+    status_class = "status" if works else "status neutral"
+    return f"""
+    <div class="analysis-result">
+      <div class="section-label">Analysis</div>
+      <div class="result-heading">
+        <div class="pun-word">{word}</div>
+        <div class="{status_class}">{status}</div>
+      </div>
+      <div class="meaning-grid">
+        <article class="meaning-card"><div class="meaning-label">Meaning 01</div><p class="meaning-text">{sense_a}</p></article>
+        <article class="meaning-card"><div class="meaning-label">Meaning 02</div><p class="meaning-text">{sense_b}</p></article>
+      </div>
+      <div class="meaning-bridge">Meaning 01 ← same word → Meaning 02</div>
+      <div class="why-title">Why it works</div>
+      <p class="why-copy">{reason}</p>
+      <div class="provider-note">Analysis generated with {provider}</div>
+    </div>
+    """
 
-    summary = (f"**Pun word:** {analysis['pun_word']}\n"
-               f"**Meaning A:** {analysis['sense_a']}\n"
-               f"**Meaning B:** {analysis['sense_b']}\n"
-               f"**Pun works:** {'Yes' if analysis['pun_works'] else 'No'}")
+
+def render_error(provider_name, error):
+    provider = html.escape(provider_name)
+    message = (
+        "Try a sentence containing a word with two possible meanings."
+        if isinstance(error, ValueError)
+        else f"The {provider} request could not be completed. Try again or switch models."
+    )
+    return f'<div class="error-card"><h3>Couldn\'t analyze this sentence</h3><p>{message}</p></div>'
+
+
+def start_analysis():
+    return gr.update(value="Analyzing…", interactive=False)
+
+
+def finish_analysis():
+    return gr.update(value="Analyze Pun →", interactive=True)
+
+
+def set_pun(sentence, provider_name):
+    """Analyze a pun and reveal the result and follow-up controls."""
+    sentence = sentence.strip()
+    if not sentence:
+        return (render_error(provider_name, ValueError("Empty sentence")), [],
+                gr.update(value=[], visible=False), {"sentence": "", "analysis": None},
+                gr.update(visible=True), gr.update(visible=False))
+    try:
+        analysis = analyze_pun(sentence, get_provider(provider_name))
+    except Exception as error:
+        return (render_error(provider_name, error), [], gr.update(value=[], visible=False),
+                {"sentence": "", "analysis": None}, gr.update(visible=True),
+                gr.update(visible=False))
+
     session = {"sentence": sentence, "analysis": analysis}
-    return summary, [], [], session
+    return (render_analysis(analysis, provider_name), [], gr.update(value=[], visible=False),
+            session, gr.update(visible=True), gr.update(visible=True))
 
 
 def respond(question, history, provider_name, session):
-    """Generate chatbot response."""
+    """Generate a follow-up response and reveal the compact conversation."""
+    question = question.strip()
     analysis = session.get("analysis") if session else None
     sentence = session.get("sentence") if session else None
+    if not question:
+        return gr.update(), history
     if not analysis or not sentence:
-        msg = "Please enter a pun sentence first (above) and click Analyze."
-        history = history + [{"role": "user", "content": question},
-                             {"role": "assistant", "content": msg}]
-        return history, history
+        answer = "Analyze a pun first, then ask a question about its wordplay."
+    else:
+        try:
+            answer = chat(sentence, question, to_pairs(history), analysis, get_provider(provider_name))
+        except Exception:
+            answer = f"The {provider_name} request couldn't be completed. Try again or switch models."
+    history = history + [
+        {"role": "user", "content": question},
+        {"role": "assistant", "content": answer},
+    ]
+    return gr.update(value=history, visible=True), history
 
-    pairs = to_pairs(history)
-    provider = get_provider(provider_name)
-    answer = chat(sentence, question, pairs, analysis, provider)
-    history = history + [{"role": "user", "content": question},
-                         {"role": "assistant", "content": answer}]
-    return history, history
 
+with gr.Blocks(
+    title="Pun Interpreter",
+    theme=gr.themes.Base(primary_hue="indigo", neutral_hue="slate"),
+    css=APP_CSS,
+) as demo:
+    with gr.Column(elem_id="app-shell"):
+        gr.HTML("""
+        <header class="hero">
+          <div class="eyebrow">Lexical ambiguity, decoded</div>
+          <h1>Pun Interpreter</h1>
+          <p class="hero-copy">Decode the double meaning behind a pun.</p>
+          <p class="hero-tech">Semantic analysis using WordNet, SBERT, spaCy, and LLM reasoning.</p>
+        </header>
+        """)
+        gr.HTML('<div class="section-label">Try a pun</div>')
+        with gr.Row(elem_id="input-row"):
+            pun_input = gr.Textbox(placeholder="Broken pencils are pointless", show_label=False,
+                                   lines=1, scale=5, elem_id="pun-input")
+            analyze_btn = gr.Button("Analyze Pun →", variant="primary", scale=1,
+                                    elem_id="analyze-button")
 
-with gr.Blocks(title="Pun Dialog Interpreter", theme=gr.themes.Soft()) as demo:
-    gr.Markdown("# Pun Interpreter")
-    gr.Markdown("Enter a pun below (or pick an example), then ask questions about it.")
+        gr.HTML('<div class="section-label" style="margin-top:16px">Choose AI</div>')
+        provider_toggle = gr.Radio(choices=AVAILABLE_PROVIDERS, value=AVAILABLE_PROVIDERS[0],
+                                   show_label=False, container=False, elem_id="provider-selector")
 
-    with gr.Row():
-        pun_input = gr.Textbox(label="Pun sentence",
-                               placeholder="Type a pun here...",
-                               scale=4)
-        analyze_btn = gr.Button("Analyze", variant="primary", scale=1)
+        gr.HTML('<div class="section-label">Try an example</div>')
+        with gr.Row(elem_classes="example-row"):
+            example_buttons = [gr.Button(label, size="sm", elem_classes="example-chip")
+                               for label in EXAMPLE_PUNS]
 
-    gr.Examples(examples=EXAMPLE_PUNS, inputs=pun_input, label="Try one of these")
+        analysis_group = gr.Column(visible=False)
+        with analysis_group:
+            gr.HTML('<div class="section-divider"></div>')
+            analysis_display = gr.HTML()
 
-    analysis_display = gr.Markdown(label="Analysis")
-    chatbot = gr.Chatbot(height=350, show_label=False, type="messages")
-    state = gr.State([])
-    session_state = gr.State({"sentence": "", "analysis": None})
+        chat_group = gr.Column(visible=False)
+        with chat_group:
+            gr.HTML('<div class="section-divider"><div class="section-label">Ask about this pun</div></div>')
+            gr.HTML('<div class="section-label" style="margin-top:4px">Suggested follow-ups</div>')
+            with gr.Row(elem_classes="followup-row"):
+                followup_buttons = [gr.Button(text, size="sm", elem_classes="followup-chip")
+                                    for text in FOLLOW_UPS]
+            chatbot = gr.Chatbot(show_label=False, type="messages", visible=False, elem_id="chatbot")
+            with gr.Row(elem_id="question-row"):
+                msg_input = gr.Textbox(placeholder="Why is the second meaning funny?",
+                                       show_label=False, lines=1, scale=5, elem_id="question-input")
+                send_btn = gr.Button("Ask →", variant="primary", scale=1, elem_id="ask-button")
 
-    with gr.Row():
-        msg_input = gr.Textbox(label="Ask a question about the pun",
-                               placeholder="example: Why is this funny?",
-                               scale=4)
-        send_btn = gr.Button("Send", variant="primary", scale=1)
+        gr.HTML("""
+        <section class="section-divider">
+          <div class="section-label">How it works</div>
+          <div class="how-grid">
+            <div class="how-step"><span class="step-number">01</span><strong>Detect</strong><span>Identify the likely pun word.</span></div>
+            <div class="how-step"><span class="step-number">02</span><strong>Interpret</strong><span>Retrieve competing lexical meanings.</span></div>
+            <div class="how-step"><span class="step-number">03</span><strong>Validate</strong><span>Check both meanings against context.</span></div>
+            <div class="how-step"><span class="step-number">04</span><strong>Explain</strong><span>Generate a natural-language explanation.</span></div>
+          </div>
+          <footer class="footer">
+            <span>SBERT · spaCy · WordNet · Gemini · OpenAI</span>
+            <a href="https://github.com/shria01/pun-dialog-interpreter" target="_blank">View source on GitHub ↗</a>
+          </footer>
+        </section>
+        """)
 
-    provider_toggle = gr.Radio(
-        choices=AVAILABLE_PROVIDERS,
-        value=AVAILABLE_PROVIDERS[0],
-        label="LLM Provider"
-    )
+        chat_state = gr.State([])
+        session_state = gr.State({"sentence": "", "analysis": None})
 
-    # Hook up buttons
-    analyze_btn.click(fn=set_pun, inputs=[pun_input, provider_toggle],
-                      outputs=[analysis_display, state, chatbot, session_state])
+        for button, sentence in zip(example_buttons, EXAMPLE_PUNS.values()):
+            button.click(lambda value=sentence: value, outputs=pun_input, queue=False)
+        for button, question in zip(followup_buttons, FOLLOW_UPS):
+            button.click(lambda value=question: value, outputs=msg_input, queue=False)
 
-    send_btn.click(fn=respond, inputs=[msg_input, state, provider_toggle, session_state],
-                   outputs=[chatbot, state]).then(lambda: "", outputs=[msg_input])
+        analysis_event = analyze_btn.click(fn=start_analysis, outputs=analyze_btn, queue=False).then(
+            fn=set_pun,
+            inputs=[pun_input, provider_toggle],
+            outputs=[analysis_display, chat_state, chatbot, session_state,
+                     analysis_group, chat_group],
+        )
+        analysis_event.then(fn=finish_analysis, outputs=analyze_btn, queue=False)
 
-    msg_input.submit(fn=respond, inputs=[msg_input, state, provider_toggle, session_state],
-                     outputs=[chatbot, state]).then(lambda: "", outputs=[msg_input])
+        send_btn.click(
+            fn=respond,
+            inputs=[msg_input, chat_state, provider_toggle, session_state],
+            outputs=[chatbot, chat_state],
+        ).then(lambda: "", outputs=msg_input, queue=False)
+        msg_input.submit(
+            fn=respond,
+            inputs=[msg_input, chat_state, provider_toggle, session_state],
+            outputs=[chatbot, chat_state],
+        ).then(lambda: "", outputs=msg_input, queue=False)
+
 
 if __name__ == "__main__":
-    demo.launch(
-        server_name="0.0.0.0",
-        server_port=int(os.environ.get("PORT", "8080")),
-    )
+    demo.launch(server_name="0.0.0.0", server_port=int(os.environ.get("PORT", "8080")))
