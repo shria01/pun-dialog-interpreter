@@ -1,13 +1,3 @@
----
-title: Pun Dialog Interpreter
-emoji: "\U0001F941"
-colorFrom: indigo
-colorTo: purple
-sdk: gradio
-python_version: "3.11"
-app_file: src/dialog_bot/app.py
----
-
 # Pun Dialog Interpreter
 
 A conversational AI system that identifies pun words, explains the humor, and answers follow-up questions. Built with Python, SBERT, spaCy, WordNet, Gradio, and your choice of Google Gemini or OpenAI GPT.

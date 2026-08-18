@@ -1,4 +1,4 @@
-# Hugging Face Spaces installs dependencies from this root-level file.
+# Application dependencies used by local and container builds.
 gradio>=5.0,<6
 google-genai>=1.0,<2
 nltk>=3.9,<4
