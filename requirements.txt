@@ -1,4 +1,7 @@
 # Application dependencies used by local and container builds.
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+torch==2.6.0+cpu
 gradio>=5.0,<6
 google-genai>=1.0,<2
 nltk>=3.9,<4

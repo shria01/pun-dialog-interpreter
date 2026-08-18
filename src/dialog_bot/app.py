@@ -41,7 +41,7 @@ APP_CSS = """
 }
 .gradio-container { background: var(--page) !important; color: var(--text) !important; }
 #app-shell { max-width: 1100px; margin: 0 auto; padding: 32px 24px 48px; gap: 0; }
-.hero { margin-bottom: 32px; }
+.hero { margin-bottom: 24px; }
 .eyebrow, .section-label, .meaning-label {
   color: var(--muted); font-size: 12px; font-weight: 700;
   letter-spacing: .12em; text-transform: uppercase;
@@ -64,10 +64,23 @@ APP_CSS = """
   transition: filter 150ms ease, transform 150ms ease;
 }
 #analyze-button:hover, #ask-button:hover { filter: brightness(1.1); transform: translateY(-1px); }
-#provider-selector { margin: 12px 0 24px; }
-#provider-selector label { background: var(--surface) !important; border-color: var(--border) !important; border-radius: 8px !important; }
-#provider-selector label:has(input:checked) { background: rgb(99 102 241 / 16%) !important; border-color: var(--accent) !important; }
-.example-row, .followup-row { gap: 8px; margin: 8px 0 32px; }
+#provider-selector {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 9px;
+  display: inline-flex; margin: 10px 0 24px; padding: 3px; width: fit-content;
+}
+#provider-selector > div { gap: 3px !important; }
+#provider-selector label {
+  background: transparent !important; border: 0 !important; border-radius: 6px !important;
+  color: var(--muted) !important; min-width: 112px; padding: 8px 12px !important;
+  transition: background 150ms ease, color 150ms ease;
+}
+#provider-selector input[type="radio"] { display: none !important; }
+#provider-selector label:has(input:checked) {
+  background: rgb(99 102 241 / 18%) !important; color: var(--text) !important;
+  box-shadow: inset 0 0 0 1px rgb(99 102 241 / 45%);
+}
+#provider-selector label:has(input:checked)::after { color: #a5b4fc; content: "✓"; margin-left: 8px; }
+.example-row, .followup-row { flex-wrap: wrap !important; gap: 8px; margin: 8px 0 32px; }
 .example-chip, .followup-chip {
   background: transparent !important; border: 1px solid var(--border) !important;
   border-radius: 6px !important; color: var(--muted) !important;
@@ -76,32 +89,33 @@ APP_CSS = """
 }
 .example-chip:hover, .followup-chip:hover { background: var(--surface) !important; border-color: #475569 !important; color: var(--text) !important; }
 .section-divider { border-top: 1px solid var(--border); margin: 16px 0 24px; padding-top: 24px; }
+#analysis-section .section-divider { margin-top: 24px; padding-top: 32px; }
 .analysis-result { margin-bottom: 40px; }
 .result-heading { display: flex; justify-content: space-between; gap: 16px; align-items: end; margin: 10px 0 20px; }
-.pun-word { color: var(--text); font-size: clamp(32px, 6vw, 44px); font-weight: 750; letter-spacing: -.02em; }
+.pun-word { color: var(--text); font-size: clamp(38px, 6vw, 48px); font-weight: 800; letter-spacing: -.01em; }
 .status { color: var(--positive); font-size: 14px; font-weight: 700; white-space: nowrap; }
 .status.neutral { color: var(--muted); }
 .meaning-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.meaning-card {
-  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
-  min-height: 150px; padding: 20px; transition: border-color 150ms ease, transform 150ms ease;
-}
-.meaning-card:hover { border-color: #475569; transform: translateY(-1px); }
+.meaning-card { background: #151e2e; border: 1px solid #334155; border-radius: 12px; min-height: 150px; padding: 20px; }
 .meaning-text { color: var(--text); font-size: 16px; line-height: 1.6; margin: 18px 0 0; }
 .meaning-bridge { color: var(--muted); font-size: 13px; text-align: center; margin: 14px 0 28px; }
+.why-panel { background: rgb(99 102 241 / 7%); border-left: 2px solid var(--accent); border-radius: 0 8px 8px 0; padding: 16px 18px; }
 .why-title { color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
-.why-copy { color: var(--text); font-size: 16px; line-height: 1.65; max-width: 780px; }
-.provider-note { color: var(--muted); font-size: 12px; margin-top: 14px; }
+.why-copy { color: var(--text); font-size: 16px; line-height: 1.65; margin-bottom: 0; max-width: 780px; }
+.provider-note { color: #64748b; font-size: 11px; margin-top: 12px; }
 .error-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
 .error-card h3 { color: var(--text); margin: 0 0 8px; }
 .error-card p { color: var(--muted); margin: 0; }
-#chatbot { background: transparent !important; border: 0 !important; min-height: 0 !important; }
+#chatbot { background: transparent !important; border: 0 !important; max-height: 340px !important; min-height: 0 !important; overflow-y: auto !important; }
 #chatbot .message { border-radius: 10px !important; padding: 12px 14px !important; }
 .how-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin: 18px 0 36px; }
+.how-step { border-top: 1px solid var(--border); padding-top: 14px; }
 .how-step strong { color: var(--text); display: block; margin: 6px 0; }
 .how-step span:last-child { color: var(--muted); font-size: 13px; line-height: 1.5; }
 .step-number { color: var(--accent); font-size: 12px; font-weight: 700; }
 .footer { border-top: 1px solid var(--border); color: var(--muted); display: flex; justify-content: space-between; padding-top: 20px; font-size: 13px; }
+.footer-meta { display: flex; flex-direction: column; gap: 3px; }
+.footer-project { color: #64748b; font-size: 11px; }
 .footer a { color: #a5b4fc; text-decoration: none; }
 @media (max-width: 700px) {
   #app-shell { padding: 24px 16px 36px; }
@@ -155,9 +169,11 @@ def render_analysis(analysis, provider_name):
         <article class="meaning-card"><div class="meaning-label">Meaning 01</div><p class="meaning-text">{sense_a}</p></article>
         <article class="meaning-card"><div class="meaning-label">Meaning 02</div><p class="meaning-text">{sense_b}</p></article>
       </div>
-      <div class="meaning-bridge">Meaning 01 ← same word → Meaning 02</div>
-      <div class="why-title">Why it works</div>
-      <p class="why-copy">{reason}</p>
+      <div class="meaning-bridge">Both meanings apply to the same word in context.</div>
+      <div class="why-panel">
+        <div class="why-title">Why it works</div>
+        <p class="why-copy">{reason}</p>
+      </div>
       <div class="provider-note">Analysis generated with {provider}</div>
     </div>
     """
@@ -229,7 +245,7 @@ with gr.Blocks(
     with gr.Column(elem_id="app-shell"):
         gr.HTML("""
         <header class="hero">
-          <div class="eyebrow">Lexical ambiguity, decoded</div>
+          <div class="eyebrow">NLP · Word sense disambiguation</div>
           <h1>Pun Interpreter</h1>
           <p class="hero-copy">Decode the double meaning behind a pun.</p>
           <p class="hero-tech">Semantic analysis using WordNet, SBERT, spaCy, and LLM reasoning.</p>
@@ -251,7 +267,7 @@ with gr.Blocks(
             example_buttons = [gr.Button(label, size="sm", elem_classes="example-chip")
                                for label in EXAMPLE_PUNS]
 
-        analysis_group = gr.Column(visible=False)
+        analysis_group = gr.Column(visible=False, elem_id="analysis-section")
         with analysis_group:
             gr.HTML('<div class="section-divider"></div>')
             analysis_display = gr.HTML()
@@ -259,15 +275,16 @@ with gr.Blocks(
         chat_group = gr.Column(visible=False)
         with chat_group:
             gr.HTML('<div class="section-divider"><div class="section-label">Ask about this pun</div></div>')
-            gr.HTML('<div class="section-label" style="margin-top:4px">Suggested follow-ups</div>')
-            with gr.Row(elem_classes="followup-row"):
-                followup_buttons = [gr.Button(text, size="sm", elem_classes="followup-chip")
-                                    for text in FOLLOW_UPS]
-            chatbot = gr.Chatbot(show_label=False, type="messages", visible=False, elem_id="chatbot")
             with gr.Row(elem_id="question-row"):
                 msg_input = gr.Textbox(placeholder="Why is the second meaning funny?",
                                        show_label=False, lines=1, scale=5, elem_id="question-input")
                 send_btn = gr.Button("Ask →", variant="primary", scale=1, elem_id="ask-button")
+            gr.HTML('<div class="section-label" style="margin-top:12px">Suggested follow-ups</div>')
+            with gr.Row(elem_classes="followup-row"):
+                followup_buttons = [gr.Button(text, size="sm", elem_classes="followup-chip")
+                                    for text in FOLLOW_UPS]
+            chatbot = gr.Chatbot(show_label=False, type="messages", visible=False,
+                                 height=340, allow_tags=False, elem_id="chatbot")
 
         gr.HTML("""
         <section class="section-divider">
@@ -279,7 +296,10 @@ with gr.Blocks(
             <div class="how-step"><span class="step-number">04</span><strong>Explain</strong><span>Generate a natural-language explanation.</span></div>
           </div>
           <footer class="footer">
-            <span>SBERT · spaCy · WordNet · Gemini · OpenAI</span>
+            <span class="footer-meta">
+              <span>SBERT · spaCy · WordNet · Gemini · OpenAI</span>
+              <span class="footer-project">Portfolio project · NLP / ML</span>
+            </span>
             <a href="https://github.com/shria01/pun-dialog-interpreter" target="_blank">View source on GitHub ↗</a>
           </footer>
         </section>
