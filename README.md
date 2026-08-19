@@ -12,7 +12,6 @@ A conversational AI system that identifies pun words, explains the humor, and an
 3. Ask questions in the chat about why it's funny
 4. Switch between Gemini and OpenAI using the model toggle in the chat header
 
-![Chat Demo](screenshots/chat.png)
 
 ## Architecture
 
