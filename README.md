@@ -2,6 +2,8 @@
 
 A conversational AI system that identifies pun words, explains the humor, and answers follow-up questions. Built with Python, SBERT, spaCy, WordNet, Gradio, and your choice of Google Gemini or OpenAI GPT.
 
+**[Try the live app →](https://pun-dialog-interpreter-234564595283.us-west1.run.app)**
+
 ![Pun Analysis Demo](screenshots/analysis.png)
 
 ## How It Works
