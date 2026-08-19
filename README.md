@@ -4,7 +4,6 @@ A conversational AI system that identifies pun words, explains the humor, and an
 
 **[Try the live app →](https://pun-dialog-interpreter-234564595283.us-west1.run.app)**
 
-![Pun Analysis Demo](screenshots/analysis.png)
 
 ## How It Works
 
