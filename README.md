@@ -9,7 +9,7 @@ A conversational AI system that identifies pun words, explains the humor, and an
 1. Enter a pun or pick one of the examples
 2. Click Analyze — the system identifies the pun word and its two meanings
 3. Ask questions in the chat about why it's funny
-4. Switch between Gemini and OpenAI using the toggle at the bottom
+4. Switch between Gemini and OpenAI using the model toggle in the chat header
 
 ![Chat Demo](screenshots/chat.png)
 

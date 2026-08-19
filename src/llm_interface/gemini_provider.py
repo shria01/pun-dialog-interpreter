@@ -61,10 +61,3 @@ class GeminiProvider(LLMInterface):
 
         response = self._generate_content(self.chat_model, gemini_messages)
         return response.text.strip()
-
-    def get_model_info(self) -> dict:
-        return {
-            "provider": "gemini",
-            "validation_model": self.validation_model,
-            "chat_model": self.chat_model,
-        }

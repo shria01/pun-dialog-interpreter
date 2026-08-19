@@ -1,34 +1,12 @@
-# dialog_bot.py
-# requires GEMINI_API_KEY or OPENAI_API_KEY environment variable
-
-import os
 import time
+
 from llm_interface.interface import LLMInterface
-
-# Add src folder to Python path so sibling modules can be imported
-import sys
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-
 from sense_finder.sense_finder import (
-    detect_sense_candidates,
-    find_senses,
     parse_sentence,
     rank_sense_candidates,
     retrieve_wordnet_candidates,
 )
 from context_validator.context_validator import validate_context
-
-def analyze_pun(sentence, provider: LLMInterface)  -> dict:
-    """Analyze pun sentence using sense finder and context validator."""
-    started = time.perf_counter()
-    candidates = find_senses(sentence)
-    validation = validate_context(sentence, candidates, provider)
-    print(f"timing analyze_total={time.perf_counter() - started:.3f}s", flush=True)
-    return validation
-
-
-def detect_candidates(sentence):
-    return detect_sense_candidates(sentence)
 
 
 def parse_pun_sentence(sentence):

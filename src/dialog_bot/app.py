@@ -11,7 +11,6 @@ sys.path.append(CURRENT_DIR)
 sys.path.append(SRC_DIR)
 
 from dialog_bot import (
-    analyze_pun,
     chat,
     parse_pun_sentence,
     retrieve_candidates,
@@ -475,55 +474,9 @@ def render_error(provider_name, error):
     return f"### Couldn't analyze this sentence\n\n{message}"
 
 
-def render_pipeline_details(raw_candidates, ranked_candidates, model_info, timings):
-    candidate_words = ", ".join(dict.fromkeys(word for word, _, _ in raw_candidates))
-    ranked_lines = "\n".join(
-        f"   - `{candidate['word']}` — relevance score `{candidate['pun_score']:.3f}`"
-        for candidate in ranked_candidates
-    )
-    validation_model = model_info.get("validation_model", model_info.get("model", "selected model"))
-    return f"""### Pipeline
-
-1. **spaCy** — candidate terms: {candidate_words} · `{timings['spacy']:.2f}s`
-2. **WordNet** — retrieved competing dictionary senses · `{timings['wordnet']:.2f}s`
-3. **SBERT** — ranked candidate ambiguity · `{timings['sbert']:.2f}s`
-{ranked_lines}
-4. **{validation_model}** — validated both interpretations and generated the explanation · `{timings['validation']:.2f}s`
-
-**Total:** `{timings['total']:.2f}s`
-
-SBERT scores are relative ranking signals, not probabilities.
-"""
-
-
-def set_pun(sentence, provider_name):
-    sentence = sentence.strip()
-    hidden_thread = gr.update(value=[], visible=False)
-    empty_session = {"sentence": "", "analysis": None}
-    empty_result = ("", "", "", "", "", "")
-    if not sentence:
-        return (*empty_result,
-                gr.update(value=render_error(provider_name, ValueError("Empty sentence")), visible=True),
-                [], hidden_thread, empty_session, gr.update(visible=False), gr.update(visible=True),
-                gr.update(visible=False), gr.update(visible=False))
-    try:
-        analysis = analyze_pun(sentence, get_provider(provider_name))
-    except Exception as error:
-        return (*empty_result, gr.update(value=render_error(provider_name, error), visible=True),
-                [], hidden_thread, empty_session, gr.update(visible=False), gr.update(visible=True),
-                gr.update(visible=False), gr.update(visible=False))
-
-    session = {"sentence": sentence, "analysis": analysis}
-    greeting = chat_greeting()
-    return (*analysis_values(analysis, provider_name), gr.update(value="", visible=False), greeting,
-            gr.update(value=greeting, visible=True, height=140), session,
-            gr.update(visible=True), gr.update(visible=True),
-            gr.update(visible=True), gr.update(visible=True))
-
-
 def analyze_with_progress(sentence, provider_name):
     """Report real pipeline boundaries while analysis is running."""
-    unchanged = [gr.update() for _ in range(15)]
+    unchanged = [gr.update() for _ in range(14)]
     yield (
         *unchanged,
         gr.update(interactive=False),
@@ -542,9 +495,7 @@ def analyze_with_progress(sentence, provider_name):
         if not sentence:
             raise ValueError("Empty sentence")
 
-        stage_started = time.perf_counter()
         doc = parse_pun_sentence(sentence)
-        spacy_seconds = time.perf_counter() - stage_started
         yield (
             *unchanged,
             gr.update(interactive=False),
@@ -558,9 +509,7 @@ def analyze_with_progress(sentence, provider_name):
             ),
         )
 
-        stage_started = time.perf_counter()
         raw_candidates = retrieve_candidates(doc)
-        wordnet_seconds = time.perf_counter() - stage_started
         yield (
             *unchanged,
             gr.update(interactive=False),
@@ -574,9 +523,7 @@ def analyze_with_progress(sentence, provider_name):
             ),
         )
 
-        stage_started = time.perf_counter()
         candidates = retrieve_senses(sentence, raw_candidates)
-        sbert_seconds = time.perf_counter() - stage_started
         yield (
             *unchanged,
             gr.update(interactive=False),
@@ -591,22 +538,11 @@ def analyze_with_progress(sentence, provider_name):
         )
 
         provider = get_provider(provider_name)
-        stage_started = time.perf_counter()
         analysis = validate_candidates(sentence, candidates, provider)
-        validation_seconds = time.perf_counter() - stage_started
-        total_seconds = time.perf_counter() - started
-        timings = {
-            "spacy": spacy_seconds,
-            "wordnet": wordnet_seconds,
-            "sbert": sbert_seconds,
-            "validation": validation_seconds,
-            "total": total_seconds,
-        }
         session = {"sentence": sentence, "analysis": analysis}
         greeting = chat_greeting()
         result = (
             *analysis_values(analysis, provider_name),
-            render_pipeline_details(raw_candidates, candidates, provider.get_model_info(), timings),
             gr.update(value="", visible=False),
             greeting,
             gr.update(value=greeting, visible=True, height=140),
@@ -619,7 +555,6 @@ def analyze_with_progress(sentence, provider_name):
     except Exception as error:
         result = (
             "", "", "", "", "", "",
-            "",
             gr.update(value=render_error(provider_name, error), visible=True),
             [],
             gr.update(value=[], visible=False),
@@ -746,7 +681,6 @@ with gr.Blocks(title="Pun Interpreter", theme=PUN_THEME, css=APP_CSS) as demo:
                         )
                 reason_display = gr.Markdown(elem_classes="why-panel")
                 provider_note = gr.Markdown(elem_classes="provider-note")
-                pipeline_details = gr.Markdown(visible=False)
 
         qa_group = gr.Column(visible=False)
         with qa_group:
@@ -813,7 +747,7 @@ with gr.Blocks(title="Pun Interpreter", theme=PUN_THEME, css=APP_CSS) as demo:
 
         analysis_outputs = [
             word_display, status_display, sense_a_display, sense_b_display,
-            reason_display, provider_note, pipeline_details, error_display, chat_state,
+            reason_display, provider_note, error_display, chat_state,
             thread_display, session_state, result_group, analysis_group,
             qa_group, bottom_group, analyze_btn, analysis_progress,
         ]

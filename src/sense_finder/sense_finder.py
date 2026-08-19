@@ -77,11 +77,6 @@ def retrieve_wordnet_candidates(doc):
   return candidates
 
 
-def detect_sense_candidates(sentence: str):
-  """Use spaCy and WordNet to collect words with multiple definitions."""
-  return retrieve_wordnet_candidates(parse_sentence(sentence))
-
-
 def rank_sense_candidates(sentence: str, candidates) -> list[dict]:
   """Use SBERT similarity to rank the candidate words and senses."""
   started = time.perf_counter()
@@ -121,12 +116,3 @@ def rank_sense_candidates(sentence: str, candidates) -> list[dict]:
   top3 = sorted(scores, key=lambda x: x["pun_score"], reverse=True)[:3]
   print(f"timing rank_senses={time.perf_counter() - started:.3f}s cache={len(_embedding_cache)}", flush=True)
   return top3
-
-
-def find_senses(sentence: str) -> list[dict]:
-  """Detect and rank candidate pun senses in one call."""
-  started = time.perf_counter()
-  candidates = detect_sense_candidates(sentence)
-  result = rank_sense_candidates(sentence, candidates)
-  print(f"timing find_senses={time.perf_counter() - started:.3f}s", flush=True)
-  return result

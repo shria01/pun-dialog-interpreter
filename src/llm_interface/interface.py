@@ -10,8 +10,3 @@ class LLMInterface(ABC):
     def chat(self, messages: list[dict]) -> str:
         """Multi-turn conversation. messages = [{"role": ..., "content": ...}]"""
         pass
-
-    @abstractmethod
-    def get_model_info(self) -> dict:
-        """Return information about the model being used."""
-        pass

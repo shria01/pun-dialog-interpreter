@@ -24,9 +24,3 @@ class OpenAIProvider(LLMInterface):
             messages=messages,
         )
         return response.choices[0].message.content.strip()
-    
-    def get_model_info(self) -> dict:
-        return {
-            "provider": "openai",
-            "model": self.model
-        }
