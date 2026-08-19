@@ -8,7 +8,7 @@ class OpenAIProvider(LLMInterface):
         api_key = os.environ.get("OPENAI_API_KEY", "")
         if not api_key:
             raise EnvironmentError("OPENAI_API_KEY is not set")
-        self.client = OpenAI(api_key=api_key)
+        self.client = OpenAI(api_key=api_key, timeout=30.0, max_retries=1)
         self.model = "gpt-4o-mini"
     
     def generate(self, prompt: str) -> str:

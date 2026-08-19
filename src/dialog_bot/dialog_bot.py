@@ -2,20 +2,49 @@
 # requires GEMINI_API_KEY or OPENAI_API_KEY environment variable
 
 import os
+import time
 from llm_interface.interface import LLMInterface
 
 # Add src folder to Python path so sibling modules can be imported
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from sense_finder.sense_finder import find_senses
+from sense_finder.sense_finder import (
+    detect_sense_candidates,
+    find_senses,
+    parse_sentence,
+    rank_sense_candidates,
+    retrieve_wordnet_candidates,
+)
 from context_validator.context_validator import validate_context
 
 def analyze_pun(sentence, provider: LLMInterface)  -> dict:
     """Analyze pun sentence using sense finder and context validator."""
+    started = time.perf_counter()
     candidates = find_senses(sentence)
     validation = validate_context(sentence, candidates, provider)
+    print(f"timing analyze_total={time.perf_counter() - started:.3f}s", flush=True)
     return validation
+
+
+def detect_candidates(sentence):
+    return detect_sense_candidates(sentence)
+
+
+def parse_pun_sentence(sentence):
+    return parse_sentence(sentence)
+
+
+def retrieve_candidates(doc):
+    return retrieve_wordnet_candidates(doc)
+
+
+def retrieve_senses(sentence, candidates):
+    return rank_sense_candidates(sentence, candidates)
+
+
+def validate_candidates(sentence, candidates, provider):
+    return validate_context(sentence, candidates, provider)
 
 
 def build_system_prompt(sentence, analysis):
@@ -32,6 +61,7 @@ Does the pun work: {analysis['pun_works']}
 Why: {analysis['reason']}
 
 Answer whatever the user asks about this pun. Be conversational, not robotic.
+Keep the answer concise and under 120 words.
 If they ask something off-topic just bring it back to the pun."""
 
 
@@ -45,10 +75,14 @@ def chat(sentence, question, history, analysis, provider: LLMInterface):
         {"role": "assistant", "content": "Got it, I've reviewed the pun analysis. Ask me anything about it."},
     ]
 
-    for user_msg, bot_msg in history:
+    # Keep prompts fast and bounded as a conversation grows.
+    for user_msg, bot_msg in history[-3:]:
         messages.append({"role": "user", "content": user_msg})
         messages.append({"role": "assistant", "content": bot_msg})
 
     messages.append({"role": "user", "content": question})
 
-    return provider.chat(messages)
+    started = time.perf_counter()
+    response = provider.chat(messages)
+    print(f"timing chat_request={time.perf_counter() - started:.3f}s", flush=True)
+    return response
