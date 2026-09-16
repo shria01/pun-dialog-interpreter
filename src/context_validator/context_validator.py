@@ -3,24 +3,24 @@ import re
 import time
 from llm_interface.interface import LLMInterface
 
+
 def validate_context(sentence, candidates: list[dict], provider: LLMInterface) -> dict:
-    candidates_text = "\n".join([
-        f"- \"{c['word']}\": Sense A: {c['sense_a']} | Sense B: {c['sense_b']}"
-        for c in candidates
-    ])
+    selected = candidates[0]
 
     prompt = f"""
-You are evaluating whether a pun works.
+You are validating and explaining a pun detected by an NLP pipeline.
 
 Sentence: "{sentence}"
-Candidate pun words:
-{candidates_text}
+Detected pun word: "{selected['word']}"
+First WordNet sense: "{selected['sense_a']}"
+Second WordNet sense: "{selected['sense_b']}"
+
+The detected word and senses are fixed. Do not replace them, rewrite them,
+or propose a different pun word. Judge whether each supplied sense applies
+and briefly explain how the fixed senses create the wordplay.
 
 Return STRICT JSON only, no markdown:
 {{
-    "pun_word": "the actual pun word from the candidates above",
-    "sense_a": "the literal meaning that applies in context",
-    "sense_b": "the figurative meaning that applies in context",
     "sense_a_valid": true or false,
     "sense_b_valid": true or false,
     "pun_works": true or false,
@@ -33,16 +33,27 @@ Return STRICT JSON only, no markdown:
         text = re.sub(r"```(?:json)?\s*", "", text)
         text = text.replace("```", "").strip()
         result = json.loads(text)
-        required = {"pun_word", "sense_a", "sense_b", "sense_a_valid", "sense_b_valid", "pun_works", "reason"}
+        required = {"sense_a_valid", "sense_b_valid", "pun_works", "reason"}
         if not required.issubset(result.keys()):
             raise ValueError("Missing required keys in response")
-        return result
+        boolean_fields = ("sense_a_valid", "sense_b_valid", "pun_works")
+        if any(not isinstance(result[field], bool) for field in boolean_fields):
+            raise ValueError("Validation flags must be JSON booleans")
+        if not isinstance(result["reason"], str):
+            raise ValueError("Validation reason must be a string")
+        return {
+            **selected,
+            "pun_word": selected["word"],
+            "sense_a_valid": result["sense_a_valid"],
+            "sense_b_valid": result["sense_b_valid"],
+            "pun_works": result["pun_works"],
+            "reason": result["reason"],
+        }
     except Exception as error:
         print(f"validation request failed: {type(error).__name__}: {error}", flush=True)
         return {
-            "pun_word": candidates[0]["word"],
-            "sense_a": candidates[0]["sense_a"],
-            "sense_b": candidates[0]["sense_b"],
+            **selected,
+            "pun_word": selected["word"],
             "sense_a_valid": False,
             "sense_b_valid": False,
             "pun_works": False,

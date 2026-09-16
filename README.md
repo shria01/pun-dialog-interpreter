@@ -15,7 +15,7 @@ A conversational AI system that identifies pun words, explains the humor, and an
 
 ## Architecture
 
-When a user enters a pun, `sense_finder` tokenizes it with spaCy and looks up WordNet synsets for each noun, verb, and adjective. For each word, it uses SBERT to encode the sentence and all of that word's definitions, then scores them based on how well the top two meanings fit the sentence context and how semantically distant those meanings are from each other. The top 3 candidates get passed to `context_validator` which sends them to the LLM and asks it to pick the actual pun word and validate whether both meanings work. The result comes back as structured JSON and goes to `dialog_bot` which builds the conversation history and routes to whichever provider the user selected. The Gradio UI shows the analysis and opens the chat for follow-up questions.
+When a user enters a pun, `sense_finder` tokenizes it with spaCy and looks up WordNet synsets for each noun, verb, and adjective. It enriches each sense with its definition, lemmas, and usage examples, then uses SBERT to compare those descriptions with the sentence. Every possible sense pair is scored by contextual fit, semantic distance, and balance. The highest-scoring pair determines each word's score, and the highest-scoring word becomes the final detected pun word. `context_validator` asks the selected LLM to validate and explain that fixed result; the LLM cannot replace the word or rewrite its WordNet senses.
 
 The LLM layer uses an abstract interface built with Python's ABC module. Gemini and OpenAI both implement the same `generate` and `chat` methods. Gemini converts the standard message format to its own format internally and OpenAI passes it through as is. Adding another provider just means implementing those two methods.
 
@@ -29,13 +29,22 @@ The LLM layer uses an abstract interface built with Python's ABC module. Gemini 
 
 ## Pun scoring
 
-For each content word the sense_finder computes:
+For every possible pair of senses belonging to a content word, `sense_finder` computes:
 
 ```
-pun_score = avg(sense_a_similarity, sense_b_similarity) × semantic_distance
+pair_score =
+    0.65 × min(sense_a_similarity, sense_b_similarity)
+  + 0.35 × semantic_distance
+  - 0.15 × abs(sense_a_similarity - sense_b_similarity)
 ```
 
-`sense_a_similarity` and `sense_b_similarity` are cosine similarities between the sentence embedding and the top two WordNet definitions. `semantic_distance` is how far apart those two definitions are from each other. The top 3 words by score get passed to the LLM, which makes the final call based on actual linguistic context.
+The minimum similarity requires both senses to fit the context, semantic distance rewards a meaningful contrast, and the final term penalizes pairs where only one sense fits well. Pairs with near-duplicate meanings are filtered out. The strongest pair determines the word's score, and the strongest word is selected without LLM intervention.
+
+Run the detector-only benchmark without using either LLM API:
+
+```bash
+python scripts/evaluate_detector.py
+```
 
 **Known limitation:** WordNet indexes individual words, so phrasal verbs and idioms like "put down" or "give up" are partially missed — the idiomatic meaning doesn't exist on either word alone.
 
@@ -45,10 +54,11 @@ Co-authored the original pun scoring and WordNet-based detection as part of a Pu
 
 In this fork, I extended the system by:
 
-- Changing detection to return the top 3 candidates instead of one so the LLM makes the final linguistic call rather than relying entirely on the score
+- Reworking detection to rank every possible WordNet sense pair using contextual fit, semantic distance, and fit balance
+- Enriching sense embeddings with WordNet lemmas and usage examples instead of embedding dictionary definitions alone
+- Making the SBERT ranking result final while restricting the LLM to validation and explanation
 - Refactoring the LLM layer into an abstract provider interface so Gemini and OpenAI are swappable without touching the rest of the code
 - Adding OpenAI support with runtime provider switching in the UI
-- Updating `context_validator` so the LLM both selects the pun word and validates it instead of only validating a pre-selected word
 - Adding retry logic and better JSON parsing for structured outputs
 
 ## Author
