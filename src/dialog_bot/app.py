@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+from html import escape
 from functools import lru_cache
 
 import gradio as gr
@@ -24,13 +25,35 @@ from llm_interface.openai_provider import OpenAIProvider
 EXAMPLE_PUNS = {
     "Lost interest": "I used to be a banker but I lost interest",
     "Pointless": "Broken pencils are pointless",
-    "Grew on me": "I used to hate facial hair but then it grew on me",
+    "Fruit flies": "Time flies like an arrow, but fruit flies like a banana.",
 }
-FOLLOW_UPS = [
-    "Why is this funny?",
-    "Which meaning is literal?",
-    "Could you explain the wordplay?",
-]
+FOLLOW_UPS = {
+    "confirmed": [
+        "Why is this funny?",
+        "Which meaning is literal?",
+        "Could you explain the wordplay?",
+    ],
+    "wrong_candidate": [
+        "Why did the detector fail?",
+        "What limitation caused this?",
+        "How was the wrong word ranked?",
+    ],
+    "wrong_senses": [
+        "Why do the meanings need review?",
+        "Was the pun word detected correctly?",
+        "Is a WordNet definition too narrow?",
+    ],
+    "not_a_pun": [
+        "Why isn't this a pun?",
+        "What kind of sentence should I try?",
+        "What does the detector look for?",
+    ],
+    "validation_error": [
+        "Why couldn't this be verified?",
+        "What did the detector find?",
+        "Should I try another model?",
+    ],
+}
 
 AVAILABLE_PROVIDERS = []
 if os.environ.get("GEMINI_API_KEY"):
@@ -71,6 +94,8 @@ APP_CSS = """
   --literal: #a9a5ec;
   --figurative: #e0b35a;
   --success: #63a67a;
+  --warning: #d5a657;
+  --danger: #cf7777;
 }
 .gradio-container footer { display: none !important; }
 #app-shell {
@@ -189,12 +214,74 @@ APP_CSS = """
   line-height: 1.12;
   margin: 0 !important;
 }
+.analyzed-sentence {
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
+  margin-top: 8px;
+}
 .status p {
-  color: var(--success);
   font-size: 13px;
   font-weight: 650;
   white-space: nowrap;
   text-align: right;
+}
+.result-status { font-weight: 650; }
+.status-confirmed { color: var(--success); }
+.status-mismatch { color: var(--warning); }
+.status-no-pun { color: var(--danger); }
+.status-unverified { color: var(--text-secondary); }
+.analysis-result:has(.status-mismatch) .meaning-card.block {
+  border-color: color-mix(in srgb, var(--warning) 55%, var(--border));
+}
+.analysis-result:has(.status-mismatch) #sense-a-card::before,
+.analysis-result:has(.status-mismatch) #sense-b-card::before {
+  background: var(--warning);
+}
+.analysis-result:has(.status-no-pun) .why-panel.block {
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+}
+.analysis-result:has(.no-pun-summary) .result-heading {
+  display: block !important;
+}
+.no-pun-summary {
+  background: color-mix(in srgb, var(--danger) 7%, var(--bg-card));
+  border: 1px solid color-mix(in srgb, var(--danger) 38%, var(--border));
+  border-left: 4px solid var(--danger);
+  border-radius: 10px;
+  padding: 22px 24px;
+}
+.no-pun-summary .no-pun-label {
+  color: var(--danger);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+.no-pun-summary .analyzed-sentence {
+  border-left: 2px solid var(--border-strong);
+  margin: 0 0 16px;
+  padding-left: 12px;
+}
+.no-pun-summary h2 {
+  color: var(--text-primary) !important;
+  font-size: 22px !important;
+  letter-spacing: -.01em;
+  margin: 0 0 8px !important;
+}
+.no-pun-summary p {
+  color: var(--text-body);
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 0;
+  max-width: 760px;
+}
+.no-pun-summary .no-pun-hint {
+  color: var(--text-secondary);
+  font-size: 13px;
+  margin-top: 14px;
 }
 .meaning-row { gap: 16px; margin-bottom: 16px; }
 .meaning-card.block {
@@ -442,26 +529,128 @@ def to_pairs(history):
     return pairs
 
 
-def chat_greeting():
+def analysis_state(analysis):
+    outcome = analysis.get("outcome", "validation_error")
+    if outcome == "wrong_candidate" and analysis.get("candidate_word_valid"):
+        return "wrong_senses"
+    return outcome
+
+
+def chat_greeting(analysis):
+    outcome = analysis_state(analysis)
+    messages = {
+        "confirmed": "✦ Pun decoded. Curious about either interpretation? Ask me anything.",
+        "wrong_candidate": (
+            "The detector selected the wrong word. Ask why the detection failed."
+        ),
+        "wrong_senses": (
+            "The pun word was detected, but one or both WordNet meanings need review. "
+            "Ask about the uncertain match."
+        ),
+        "not_a_pun": "No clear pun was found. Ask why this was not classified as wordplay.",
+        "validation_error": "The candidate could not be verified. You can still ask about the analysis.",
+    }
     return [{
         "role": "assistant",
-        "content": "✦ Pun decoded. Curious about either interpretation? Ask me anything.",
+        "content": messages[outcome],
     }]
 
 
-def analysis_values(analysis, provider_name):
+def follow_up_questions(analysis):
+    outcome = analysis_state(analysis)
+    return FOLLOW_UPS.get(outcome, FOLLOW_UPS["validation_error"])
+
+
+def analysis_values(sentence, analysis, provider_name):
+    outcome = analysis_state(analysis)
     word = str(analysis.get("pun_word", "No clear pun"))
     sense_a = str(analysis.get("sense_a", "No first interpretation found."))
     sense_b = str(analysis.get("sense_b", "No second interpretation found."))
     reason = str(analysis.get("reason", "No explanation was returned."))
-    works = bool(analysis.get("pun_works"))
-    status = "✓ Double meaning confirmed" if works else "No clear pun detected"
+    if outcome in {"wrong_candidate", "wrong_senses"}:
+        reason = str(analysis.get("detector_reason", reason))
+    states = {
+        "confirmed": ("confirmed", "✓ Double meaning confirmed", "Why it works"),
+        "wrong_candidate": (
+            "mismatch",
+            "Detector failed",
+            "Why this detection failed",
+        ),
+        "wrong_senses": (
+            "mismatch",
+            "Meaning match needs review",
+            "Why the match is uncertain",
+        ),
+        "not_a_pun": ("no-pun", "No pun detected", "Why it is not a pun"),
+        "validation_error": ("unverified", "Could not verify detection", "What happened"),
+    }
+    state_class, status_text, reason_heading = states.get(
+        outcome,
+        states["validation_error"],
+    )
+    structural_ambiguities = analysis.get("sentence_pos_ambiguities", [])
+    phrase_gaps = analysis.get(
+        "sentence_coverage_gaps",
+        analysis.get("coverage_gaps", []),
+    )
+    if outcome == "wrong_candidate" and (
+        structural_ambiguities or phrase_gaps
+    ):
+        limitation_type = (
+            "Structural wordplay"
+            if structural_ambiguities
+            else "Phrase-based wordplay"
+        )
+        word_with_sentence = (
+            f"## {limitation_type}\n\n"
+            f'<div class="analyzed-sentence">“{escape(sentence)}”</div>'
+        )
+        status = (
+            '<span class="result-status status-mismatch">'
+            "Outside detector scope</span>"
+        )
+        return (
+            gr.update(value=word_with_sentence),
+            gr.update(value=status, visible=True),
+            gr.update(value="", visible=False),
+            gr.update(value="", visible=False),
+            gr.update(
+                value=f"#### Why the detector could not analyze it\n\n{reason}",
+                visible=True,
+            ),
+            "spaCy + WordNet + SBERT analysis · Validation and Explanation",
+        )
+    if outcome == "not_a_pun":
+        no_pun_summary = (
+            '<div class="no-pun-summary">'
+            '<div class="no-pun-label">No double meaning found</div>'
+            '<h2>This reads as a regular sentence.</h2>'
+            f'<div class="analyzed-sentence">“{escape(sentence)}”</div>'
+            f'<p>{escape(reason)}</p>'
+            '<div class="no-pun-hint">Try a sentence where one word can support two meanings.</div>'
+            '</div>'
+        )
+        return (
+            gr.update(value=no_pun_summary),
+            gr.update(value="", visible=False),
+            gr.update(value="", visible=False),
+            gr.update(value="", visible=False),
+            gr.update(value="", visible=False),
+            f"spaCy + WordNet + SBERT analysis · Validation and Explanation",
+        )
+
+    status = f'<span class="result-status status-{state_class}">{status_text}</span>'
+    word_with_sentence = (
+        f"## {word}\n\n"
+        f'<div class="analyzed-sentence">“{escape(sentence)}”</div>'
+    )
     return (
-        f"## {word}", status,
-        f"#### Interpretation A\n\n{sense_a}",
-        f"#### Interpretation B\n\n{sense_b}",
-        f"#### Why it works\n\n{reason}",
-        f"spaCy + WordNet + SBERT analysis · {provider_name} validation and explanation",
+        gr.update(value=word_with_sentence),
+        gr.update(value=status, visible=True),
+        gr.update(value=f"#### Interpretation A\n\n{sense_a}", visible=True),
+        gr.update(value=f"#### Interpretation B\n\n{sense_b}", visible=True),
+        gr.update(value=f"#### {reason_heading}\n\n{reason}", visible=True),
+        f"spaCy + WordNet + SBERT analysis · Validation and Explanation",
     )
 
 
@@ -474,17 +663,51 @@ def render_error(provider_name, error):
     return f"### Couldn't analyze this sentence\n\n{message}"
 
 
+def completed_analysis_updates(sentence, analysis, provider_name):
+    """Build the final UI updates for confirmed, failed, and no-pun results."""
+    session = {"sentence": sentence, "analysis": analysis}
+    show_chat = analysis.get("outcome") != "not_a_pun"
+    greeting = chat_greeting(analysis) if show_chat else []
+    suggested_questions = follow_up_questions(analysis)
+    return (
+        *analysis_values(sentence, analysis, provider_name),
+        gr.update(value="", visible=False),
+        greeting,
+        gr.update(value=greeting, visible=show_chat, height=140),
+        session,
+        gr.update(visible=True),
+        gr.update(visible=True),
+        gr.update(visible=show_chat),
+        gr.update(visible=True),
+        *[gr.update(value=question) for question in suggested_questions],
+    )
+
+
 def analyze_with_progress(sentence, provider_name):
     """Report real pipeline boundaries while analysis is running."""
-    unchanged = [gr.update() for _ in range(14)]
+    # Preserve every output while advancing only the loading indicator. These
+    # updates are reused by each intermediate pipeline-stage yield below.
+    unchanged = [gr.update() for _ in range(17)]
+    reset_state = [
+        *[gr.update() for _ in range(6)],
+        gr.update(value="", visible=False),
+        [],
+        gr.update(value=[], visible=False),
+        {"sentence": "", "analysis": None},
+        gr.update(visible=False),
+        gr.update(visible=False),
+        gr.update(visible=False),
+        gr.update(visible=False),
+        *[gr.update(value=question) for question in FOLLOW_UPS["confirmed"]],
+    ]
     yield (
-        *unchanged,
+        *reset_state,
         gr.update(interactive=False),
         gr.update(
             value=(
                 "**Analyzing pun** · **Parsing with spaCy** · "
                 "Retrieving WordNet senses · Ranking with SBERT · "
-                f"Validating with {provider_name}"
+                "Validating"
             ),
             visible=True,
         ),
@@ -503,7 +726,7 @@ def analyze_with_progress(sentence, provider_name):
                 value=(
                     "**Analyzing pun** · Parsing with spaCy · "
                     "**Retrieving WordNet senses** · Ranking with SBERT · "
-                    f"Validating with {provider_name}"
+                    "Validating"
                 ),
                 visible=True,
             ),
@@ -517,7 +740,7 @@ def analyze_with_progress(sentence, provider_name):
                 value=(
                     "**Analyzing pun** · Parsing with spaCy · "
                     "Retrieving WordNet senses · **Ranking with SBERT** · "
-                    f"Validating with {provider_name}"
+                    "Validating"
                 ),
                 visible=True,
             ),
@@ -531,7 +754,7 @@ def analyze_with_progress(sentence, provider_name):
                 value=(
                     "**Analyzing pun** · Parsing with spaCy · "
                     "Retrieving WordNet senses · Ranking with SBERT · "
-                    f"**Validating with {provider_name}**"
+                    "**Validating**"
                 ),
                 visible=True,
             ),
@@ -539,31 +762,41 @@ def analyze_with_progress(sentence, provider_name):
 
         provider = get_provider(provider_name)
         analysis = validate_candidates(sentence, candidates, provider)
-        session = {"sentence": sentence, "analysis": analysis}
-        greeting = chat_greeting()
-        result = (
-            *analysis_values(analysis, provider_name),
-            gr.update(value="", visible=False),
-            greeting,
-            gr.update(value=greeting, visible=True, height=140),
-            session,
-            gr.update(visible=True),
-            gr.update(visible=True),
-            gr.update(visible=True),
-            gr.update(visible=True),
-        )
+        result = completed_analysis_updates(sentence, analysis, provider_name)
     except Exception as error:
-        result = (
-            "", "", "", "", "", "",
-            gr.update(value=render_error(provider_name, error), visible=True),
-            [],
-            gr.update(value=[], visible=False),
-            {"sentence": "", "analysis": None},
-            gr.update(visible=False),
-            gr.update(visible=True),
-            gr.update(visible=False),
-            gr.update(visible=False),
-        )
+        if (
+            isinstance(error, ValueError)
+            and str(error) == "No candidate pun words found in sentence."
+        ):
+            analysis = {
+                "outcome": "not_a_pun",
+                "candidate_word_valid": False,
+                "sense_a_valid": False,
+                "sense_b_valid": False,
+                "pun_works": False,
+                "reason": (
+                    "The sentence does not contain a content word with multiple "
+                    "WordNet meanings for the detector to compare."
+                ),
+            }
+            result = completed_analysis_updates(
+                sentence,
+                analysis,
+                provider_name,
+            )
+        else:
+            result = (
+                "", "", "", "", "", "",
+                gr.update(value=render_error(provider_name, error), visible=True),
+                [],
+                gr.update(value=[], visible=False),
+                {"sentence": "", "analysis": None},
+                gr.update(visible=False),
+                gr.update(visible=True),
+                gr.update(visible=False),
+                gr.update(visible=False),
+                *[gr.update(value=question) for question in FOLLOW_UPS["confirmed"]],
+            )
     print(f"timing analyze_total={time.perf_counter() - started:.3f}s", flush=True)
     yield (
         *result,
@@ -616,17 +849,21 @@ def respond_with_progress(question, history, provider_name, session):
     )
 
 
-def suggestion_handler(question):
+def suggestion_handler(index):
     def handle(history, provider_name, session):
+        analysis = session.get("analysis") if session else None
+        questions = follow_up_questions(analysis or {})
+        question = questions[index]
         yield from respond_with_progress(question, history, provider_name, session)
     return handle
 
 
-with gr.Blocks(title="Pun Interpreter", theme=PUN_THEME, css=APP_CSS) as demo:
+with gr.Blocks(title="Pun Detector", theme=PUN_THEME, css=APP_CSS) as demo:
     with gr.Column(elem_id="app-shell"):
         gr.Markdown(
-            "NLP · WORD SENSE DISAMBIGUATION\n\n# Pun Interpreter\n\n"
-            "Decode the double meaning behind a pun.",
+            "NLP · WORD SENSE DISAMBIGUATION\n\n# Pun Detector\n\n"
+            "Detect and decode a double meaning carried by a single word. "
+            "Phrase-based puns are not currently supported.",
             elem_classes="hero",
         )
         with gr.Column(elem_classes="input-card"):
@@ -722,7 +959,7 @@ with gr.Blocks(title="Pun Interpreter", theme=PUN_THEME, css=APP_CSS) as demo:
                 with gr.Row(elem_classes="followup-row"):
                     followup_buttons = [
                         gr.Button(question, size="sm", variant="secondary", elem_classes="followup-chip")
-                        for question in FOLLOW_UPS
+                        for question in FOLLOW_UPS["confirmed"]
                     ]
                 with gr.Row(elem_id="question-row"):
                     msg_input = gr.Textbox(
@@ -738,7 +975,7 @@ with gr.Blocks(title="Pun Interpreter", theme=PUN_THEME, css=APP_CSS) as demo:
             gr.Markdown(
                 "How it works: spaCy → WordNet → SBERT → Gemini/OpenAI\n\n"
                 "SBERT · spaCy · WordNet · Gemini · OpenAI  ·  "
-                "[View source on GitHub ↗](https://github.com/shria01/pun-dialog-interpreter)",
+                "[Explore the source code on GitHub ↗](https://github.com/shria01/pun-dialog-interpreter)",
                 elem_classes="bottom-meta",
             )
 
@@ -749,7 +986,7 @@ with gr.Blocks(title="Pun Interpreter", theme=PUN_THEME, css=APP_CSS) as demo:
             word_display, status_display, sense_a_display, sense_b_display,
             reason_display, provider_note, error_display, chat_state,
             thread_display, session_state, result_group, analysis_group,
-            qa_group, bottom_group, analyze_btn, analysis_progress,
+            qa_group, bottom_group, *followup_buttons, analyze_btn, analysis_progress,
         ]
 
         for button, sentence in zip(example_buttons, EXAMPLE_PUNS.values()):
@@ -764,9 +1001,9 @@ with gr.Blocks(title="Pun Interpreter", theme=PUN_THEME, css=APP_CSS) as demo:
                 show_progress="hidden",
             )
 
-        for button, question in zip(followup_buttons, FOLLOW_UPS):
+        for index, button in enumerate(followup_buttons):
             button.click(
-                fn=suggestion_handler(question),
+                fn=suggestion_handler(index),
                 inputs=[chat_state, provider_toggle, session_state],
                 outputs=[thread_display, chat_state, send_btn, msg_input],
                 show_progress="hidden",

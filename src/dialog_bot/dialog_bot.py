@@ -31,12 +31,15 @@ def build_system_prompt(sentence, analysis):
 
 The sentence is: "{sentence}"
 The pun word is "{analysis['pun_word']}"
+The detected word is valid: {analysis.get('candidate_word_valid', False)}
 First meaning: {analysis['sense_a']}
 Second meaning: {analysis['sense_b']}
 First meaning works in context: {analysis['sense_a_valid']}
 Second meaning works in context: {analysis['sense_b_valid']}
 Does the pun work: {analysis['pun_works']}
+Validation outcome: {analysis.get('outcome', 'validation_error')}
 Why: {analysis['reason']}
+Detector postmortem: {analysis.get('detector_reason', 'Not applicable')}
 
 Answer whatever the user asks about this pun. Be conversational, not robotic.
 Keep the answer concise and under 120 words.
